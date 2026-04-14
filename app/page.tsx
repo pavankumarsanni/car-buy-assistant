@@ -5,67 +5,175 @@ import { useState, useRef, useEffect, FormEvent } from "react";
 type DealerCard = { make: string; model: string; trim?: string };
 type Message = { role: "user" | "assistant"; content: string; dealerCard?: DealerCard };
 
-function buildDealerUrls(make: string, model: string, zip: string) {
-  const makeSlug = make.toLowerCase().replace(/\s+/g, "-");
-  const modelSlug = model.toLowerCase().replace(/\s+/g, "-");
-  return {
-    carsCom: `https://www.cars.com/shopping/results/?stock_type=all&makes[]=${makeSlug}&models[]=${makeSlug}-${modelSlug}&zip=${zip}&radius=25`,
-    autoTrader: `https://www.autotrader.com/cars-for-sale/new-cars/${makeSlug}/${modelSlug}?zip=${zip}&radius=25`,
+type DealerListing = {
+  id: string;
+  year: number;
+  make: string;
+  model: string;
+  trim: string;
+  price: number;
+  mileage: number;
+  exteriorColor: string;
+  inventoryType: "new" | "used" | "certified";
+  dealBadge: "great" | "good" | "fair";
+  dealer: {
+    name: string;
+    address: string;
+    city: string;
+    state: string;
+    phone: string;
+    distance: number;
+    rating: number;
   };
+};
+
+const BADGE_STYLES = {
+  great: "bg-green-100 text-green-700",
+  good: "bg-blue-100 text-blue-700",
+  fair: "bg-gray-100 text-gray-600",
+};
+const BADGE_LABELS = { great: "Great Deal", good: "Good Deal", fair: "Fair Price" };
+
+const TYPE_STYLES = {
+  new: "bg-blue-600 text-white",
+  certified: "bg-purple-600 text-white",
+  used: "bg-gray-500 text-white",
+};
+
+function ListingCard({ listing }: { listing: DealerListing }) {
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    `${listing.dealer.name} ${listing.dealer.address} ${listing.dealer.city} ${listing.dealer.state}`
+  )}`;
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide ${TYPE_STYLES[listing.inventoryType]}`}>
+              {listing.inventoryType}
+            </span>
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${BADGE_STYLES[listing.dealBadge]}`}>
+              {BADGE_LABELS[listing.dealBadge]}
+            </span>
+          </div>
+          <p className="text-sm font-semibold text-gray-900">
+            {listing.year} {listing.make} {listing.model} {listing.trim}
+          </p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {listing.inventoryType === "new" ? `${listing.mileage} mi` : `${listing.mileage.toLocaleString()} mi`} · {listing.exteriorColor}
+          </p>
+        </div>
+        <p className="text-base font-bold text-gray-900 whitespace-nowrap">
+          ${listing.price.toLocaleString()}
+        </p>
+      </div>
+
+      <div className="border-t border-gray-100 pt-3 space-y-1">
+        <p className="text-xs font-medium text-gray-800">{listing.dealer.name}</p>
+        <div className="flex items-center gap-2 text-xs text-gray-500">
+          <span>{"★".repeat(Math.round(listing.dealer.rating))}{"☆".repeat(5 - Math.round(listing.dealer.rating))}</span>
+          <span>{listing.dealer.rating.toFixed(1)}</span>
+          <span>·</span>
+          <span>{listing.dealer.distance} mi away</span>
+        </div>
+        <p className="text-xs text-gray-500">
+          {listing.dealer.address}, {listing.dealer.city}, {listing.dealer.state}
+        </p>
+      </div>
+
+      <div className="flex gap-2">
+        <a
+          href={`tel:${listing.dealer.phone}`}
+          className="flex-1 text-center text-xs font-medium py-2 px-3 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors border border-blue-200"
+        >
+          📞 {listing.dealer.phone}
+        </a>
+        <a
+          href={mapsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 text-center text-xs font-medium py-2 px-3 rounded-lg bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors border border-gray-200"
+        >
+          🗺 Directions
+        </a>
+      </div>
+    </div>
+  );
 }
 
 function DealerCardWidget({ make, model, trim }: DealerCard) {
   const [zip, setZip] = useState("");
-  const urls = buildDealerUrls(make, model, zip);
+  const [listings, setListings] = useState<DealerListing[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const label = trim ? `${make} ${model} ${trim}` : `${make} ${model}`;
 
+  const handleSearch = async () => {
+    if (zip.length !== 5) return;
+    setSearching(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/dealers?make=${encodeURIComponent(make)}&model=${encodeURIComponent(model)}&zip=${zip}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setListings(data.listings);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setSearching(false);
+    }
+  };
+
   return (
-    <div className="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <span className="text-lg">📍</span>
-        <div>
-          <p className="text-sm font-semibold text-blue-900">Ready to buy the {label}?</p>
-          <p className="text-xs text-blue-600">Enter your zip code to find dealers near you.</p>
+    <div className="mt-3 space-y-3">
+      {!listings ? (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">📍</span>
+            <div>
+              <p className="text-sm font-semibold text-blue-900">Find deals on the {label}</p>
+              <p className="text-xs text-blue-600">Enter your zip code to see listings near you.</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={zip}
+              onChange={(e) => setZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              placeholder="Enter zip code"
+              maxLength={5}
+              className="flex-1 border border-blue-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-white"
+            />
+            <button
+              onClick={handleSearch}
+              disabled={zip.length !== 5 || searching}
+              className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {searching ? "Searching…" : "Find Deals"}
+            </button>
+          </div>
+          {zip.length > 0 && zip.length < 5 && (
+            <p className="text-xs text-red-500">Please enter a full 5-digit zip code.</p>
+          )}
+          {error && <p className="text-xs text-red-500">{error}</p>}
         </div>
-      </div>
-      <input
-        type="text"
-        value={zip}
-        onChange={(e) => setZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
-        placeholder="Enter zip code"
-        maxLength={5}
-        className="w-full border border-blue-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-white"
-      />
-      <div className="flex gap-2">
-        <a
-          href={zip.length === 5 ? urls.carsCom : undefined}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-disabled={zip.length !== 5}
-          className={`flex-1 text-center text-xs font-medium py-2 px-3 rounded-lg transition-colors ${
-            zip.length === 5
-              ? "bg-blue-600 text-white hover:bg-blue-700"
-              : "bg-gray-200 text-gray-400 cursor-not-allowed pointer-events-none"
-          }`}
-        >
-          Search Cars.com
-        </a>
-        <a
-          href={zip.length === 5 ? urls.autoTrader : undefined}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-disabled={zip.length !== 5}
-          className={`flex-1 text-center text-xs font-medium py-2 px-3 rounded-lg transition-colors ${
-            zip.length === 5
-              ? "bg-orange-500 text-white hover:bg-orange-600"
-              : "bg-gray-200 text-gray-400 cursor-not-allowed pointer-events-none"
-          }`}
-        >
-          Search AutoTrader
-        </a>
-      </div>
-      {zip.length > 0 && zip.length < 5 && (
-        <p className="text-xs text-red-500">Please enter a full 5-digit zip code.</p>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-gray-700">
+              {listings.length} listings near {zip}
+            </p>
+            <button
+              onClick={() => { setListings(null); setZip(""); }}
+              className="text-xs text-blue-600 hover:underline"
+            >
+              Change zip
+            </button>
+          </div>
+          {listings.map((l) => <ListingCard key={l.id} listing={l} />)}
+        </div>
       )}
     </div>
   );
