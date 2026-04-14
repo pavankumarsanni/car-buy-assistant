@@ -2,7 +2,74 @@
 
 import { useState, useRef, useEffect, FormEvent } from "react";
 
-type Message = { role: "user" | "assistant"; content: string };
+type DealerCard = { make: string; model: string; trim?: string };
+type Message = { role: "user" | "assistant"; content: string; dealerCard?: DealerCard };
+
+function buildDealerUrls(make: string, model: string, zip: string) {
+  const makeSlug = make.toLowerCase().replace(/\s+/g, "-");
+  const modelSlug = model.toLowerCase().replace(/\s+/g, "-");
+  return {
+    carsCom: `https://www.cars.com/shopping/results/?stock_type=all&makes[]=${makeSlug}&models[]=${makeSlug}-${modelSlug}&zip=${zip}&radius=25`,
+    autoTrader: `https://www.autotrader.com/cars-for-sale/new-cars/${makeSlug}/${modelSlug}?zip=${zip}&radius=25`,
+  };
+}
+
+function DealerCardWidget({ make, model, trim }: DealerCard) {
+  const [zip, setZip] = useState("");
+  const urls = buildDealerUrls(make, model, zip);
+  const label = trim ? `${make} ${model} ${trim}` : `${make} ${model}`;
+
+  return (
+    <div className="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">📍</span>
+        <div>
+          <p className="text-sm font-semibold text-blue-900">Ready to buy the {label}?</p>
+          <p className="text-xs text-blue-600">Enter your zip code to find dealers near you.</p>
+        </div>
+      </div>
+      <input
+        type="text"
+        value={zip}
+        onChange={(e) => setZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
+        placeholder="Enter zip code"
+        maxLength={5}
+        className="w-full border border-blue-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-white"
+      />
+      <div className="flex gap-2">
+        <a
+          href={zip.length === 5 ? urls.carsCom : undefined}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-disabled={zip.length !== 5}
+          className={`flex-1 text-center text-xs font-medium py-2 px-3 rounded-lg transition-colors ${
+            zip.length === 5
+              ? "bg-blue-600 text-white hover:bg-blue-700"
+              : "bg-gray-200 text-gray-400 cursor-not-allowed pointer-events-none"
+          }`}
+        >
+          Search Cars.com
+        </a>
+        <a
+          href={zip.length === 5 ? urls.autoTrader : undefined}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-disabled={zip.length !== 5}
+          className={`flex-1 text-center text-xs font-medium py-2 px-3 rounded-lg transition-colors ${
+            zip.length === 5
+              ? "bg-orange-500 text-white hover:bg-orange-600"
+              : "bg-gray-200 text-gray-400 cursor-not-allowed pointer-events-none"
+          }`}
+        >
+          Search AutoTrader
+        </a>
+      </div>
+      {zip.length > 0 && zip.length < 5 && (
+        <p className="text-xs text-red-500">Please enter a full 5-digit zip code.</p>
+      )}
+    </div>
+  );
+}
 
 const SUGGESTIONS = [
   "Find me a reliable SUV under $35k",
@@ -39,7 +106,10 @@ export default function Home() {
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: data.reply, dealerCard: data.dealerCard },
+      ]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
       setMessages((prev) => [
@@ -105,13 +175,14 @@ export default function Home() {
                   </div>
                 )}
                 <div
-                  className={`max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap shadow-sm ${
+                  className={`max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
                     m.role === "user"
-                      ? "bg-blue-600 text-white rounded-br-sm"
+                      ? "bg-blue-600 text-white rounded-br-sm whitespace-pre-wrap"
                       : "bg-white text-gray-800 border border-gray-200 rounded-bl-sm"
                   }`}
                 >
-                  {m.content}
+                  <span className="whitespace-pre-wrap">{m.content}</span>
+                  {m.dealerCard && <DealerCardWidget {...m.dealerCard} />}
                 </div>
               </div>
             ))}
