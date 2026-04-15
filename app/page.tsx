@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, FormEvent } from "react";
+import ReactMarkdown from "react-markdown";
 
 type DealerCard = { make: string; model: string; trim?: string };
 type Message = { role: "user" | "assistant"; content: string; dealerCard?: DealerCard };
@@ -355,7 +356,13 @@ export default function Home() {
                       : "bg-white text-gray-800 border border-gray-200 rounded-bl-sm"
                   }`}
                 >
-                  <span className="whitespace-pre-wrap">{m.content}</span>
+                  {m.role === "user" ? (
+                    m.content
+                  ) : (
+                    <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-strong:text-gray-900 prose-headings:text-gray-900">
+                      <ReactMarkdown>{m.content}</ReactMarkdown>
+                    </div>
+                  )}
                   {m.dealerCard && <DealerCardWidget {...m.dealerCard} />}
                 </div>
               </div>
