@@ -105,7 +105,7 @@ function ListingCard({ listing }: { listing: DealerListing }) {
 async function reverseGeocodeToZip(lat: number, lon: number): Promise<string> {
   const res = await fetch(
     `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`,
-    { headers: { "User-Agent": "car-buy-assistant/1.0" } }
+    { headers: { "User-Agent": "auto-advisor/1.0" } }
   );
   if (!res.ok) throw new Error("Geocoding failed");
   const data = await res.json();
@@ -308,7 +308,7 @@ export default function Home() {
           🚗
         </div>
         <div>
-          <h1 className="font-semibold text-gray-900 leading-tight">Car Buying Assistant</h1>
+          <h1 className="font-semibold text-gray-900 leading-tight">AutoAdvisor</h1>
           <p className="text-xs text-gray-500">Powered by Claude AI</p>
         </div>
       </header>
